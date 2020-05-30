@@ -3,17 +3,15 @@ let stripCurrentModeTimerSet: uint8 = 30
 let pixelSpeedTrigger: boolean = false
 let pixelRGBColorChange: boolean = false
 let pixelsCntActive: uint8 = 0
-let stripDirectionForward: boolean = true
 let stripFlash: uint8 = 0
 let stripFlashTotal: uint8 = 0
 let stripFlashTimerSet: uint8 = 15
-let stripOccupiedPositions: boolean[] = []
+let stripFreePositions: number[] = [];
 let pixelSpeedIndex: uint8 = 0
 let pixelSpeedTimer: uint32 = 0
 let pixelSpeedDelay: uint16 = 0
 let pixelDifferentBrightness: uint8 = 0
 let b = 0
-let i = 0
 let z = 0
 
 const stripLength: uint16 = 256
@@ -26,7 +24,6 @@ const pixelSpeedDelayStep: uint16 = 10000 // timeout mezi kroky [ms]
 const pixelsMinMax: Buffer = Buffer.fromArray([25, 35]) // pocet pixelu najednou (min a max interval)
 const stripCurrentModeTimer: Buffer = Buffer.fromArray([30, 300]) // [s] interval pro random mode timer
 const stripPixelsFlash: Buffer = Buffer.fromArray([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) // pocet pixelu na zablesk
-const flashWhen: Buffer = Buffer.fromArray([10, 5, 4, 3, 2, 1]) // kdy ma byt zablesk jako podil mbr
 const flashTimesMinMax: Buffer = Buffer.fromArray([1, 5]) // kolikrat se ma bliknout
 const stripPixelsFlashStartIndex: uint8 = 10 // index alespon 1x zablesk
 const stripPixelsFlashLength = stripPixelsFlash.length - 1
@@ -49,7 +46,6 @@ class EggPixel {
     currentBrightness: int16 = 0;
     stepChangeBrightness: uint8 = 0;
     flashTimes: uint8 = 0;
-    flashWhen: uint8 = 0;
     rgb: Buffer = Buffer.create(3);
 
     constructor(mode: number){
@@ -238,7 +234,7 @@ function pixelProcess(eggPixel: EggPixel, pos: number) {
 
         if (eggPixel.flashTimes > 0) {
 
-            if(((eggPixel.currentBrightness >= (eggPixel.maxBrightness / eggPixel.flashWhen)) || eggPixel.status == 2)){
+            if((eggPixel.currentBrightness == eggPixel.maxBrightness) || (eggPixel.status == 2)){
 
                 if(pixelCurrentMode == 2){
                     strip.setPixelColor(eggPixel.position, pixel.rgb(eggPixel.rgb.getUint8(0), eggPixel.rgb.getUint8(1), eggPixel.rgb.getUint8(2)));
@@ -259,21 +255,16 @@ function pixelProcess(eggPixel: EggPixel, pos: number) {
 
     if ((eggPixel.currentBrightness == 0) && (eggPixel.status == 2)) {
 
-        stripOccupiedPositions[eggPixel.position] = false
-
         pixelsCntActive--
-
-        eggPixel.status = 0
-
+        
         if(eggPixel.maxBrightnessHigh){
             pixelDifferentBrightness--
         }
 
-        if (eggPixel.flashWhen > 0) {
+        eggPixel.flashTimes = 0
+        eggPixel.status = 0
 
-            eggPixel.flashTimes = 0
-            eggPixel.flashWhen = 0
-        }
+        stripFreePositions.push(eggPixel.position);
     }
 }
 
@@ -283,22 +274,11 @@ function pixelCreate(eggPixel: EggPixel, pos: number) {
 
         pixelsCntActive++
 
-        eggPixel.status = 1
+        eggPixel.position = stripFreePositions[Math.randomRange(0, stripFreePositions.length - 1)];
+        stripFreePositions.removeElement(eggPixel.position);
 
-        i = Math.randomRange(0, stripLengthCurrent - 1)
-        while ((i < 0) || (i >= stripLengthCurrent) || (stripOccupiedPositions[i] == true)) {            
-            if ((i >= stripLengthCurrent) || (i < 0)) {
-                i = Math.randomRange(0, stripLengthCurrent - 1);
-            }else{
-                i = ((pixelSpeedIndex > 0) || stripDirectionForward) ? i + 1 : i - 1;
-            }
-        }
-
-        eggPixel.position = i
         eggPixel.maxBrightness = Math.randomRange(51, 86);
-        eggPixel.maxBrightnessHigh = false
-        
-        stripOccupiedPositions[i] = true
+        eggPixel.maxBrightnessHigh = false        
 
         if(pixelDifferentBrightness < pixelDifferentBrightnesses){
 
@@ -306,18 +286,17 @@ function pixelCreate(eggPixel: EggPixel, pos: number) {
             eggPixel.maxBrightnessHigh = true
 
             pixelDifferentBrightness++
+        }
 
-            if((pixelCurrentMode > 0) && (stripFlash < stripFlashTotal)){
+        if((pixelCurrentMode > 0) && (stripFlash < stripFlashTotal)){
             
-                eggPixel.flashTimes = Math.randomRange(flashTimesMinMax[0], flashTimesMinMax[1])
-                eggPixel.flashWhen = flashWhen[Math.randomRange(0, flashWhen.length - 1)]
+            eggPixel.flashTimes = Math.randomRange(flashTimesMinMax[0], flashTimesMinMax[1])
 
-                stripFlash++
+            stripFlash++
 
-                if(stripFlash == stripFlashTotal){
-                    stripFlashTotal = 0
-                    stripFlash = 0
-                }
+            if(stripFlash == stripFlashTotal){
+                stripFlashTotal = 0
+                stripFlash = 0
             }
         }
 
@@ -353,8 +332,7 @@ function pixelCreate(eggPixel: EggPixel, pos: number) {
         eggPixel.currentBrightness = 0
         eggPixel.stepChangeBrightness = z
         eggPixel.timer = 0
-
-        stripDirectionForward = Math.random() >= 0.5
+        eggPixel.status = 1
     }
 }
 
@@ -366,7 +344,7 @@ function stripReset() {
 
     strip.clear()
 
-    stripOccupiedPositions = []
+    stripFreePositions = [];
     pixels = []
 
     pixelDifferentBrightness = 0
@@ -382,7 +360,7 @@ function stripReset() {
 
     b = 0
     while(b < stripLengthCurrent){
-        stripOccupiedPositions[b] = false
-        b++
+        stripFreePositions.push(b);
+        b++;
     }
 }
