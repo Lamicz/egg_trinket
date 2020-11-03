@@ -1,4 +1,4 @@
-let pixelCurrentMode: uint8 = 1 // [0 - no flash, 1 - flash, 2 - RGB]
+let pixelCurrentMode: uint8 = 1 // [0 - no flash, 1 - flash, 2 - RGB, 3 - RGB one color]
 let stripCurrentModeTimerSet: uint8 = 30
 let pixelSpeedTrigger: boolean = false
 let pixelRGBColorChange: boolean = false
