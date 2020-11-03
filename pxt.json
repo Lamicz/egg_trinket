@@ -9,6 +9,10 @@
         "README.md"
     ],
     "testFiles": [],
+    "targetVersions": {
+        "target": "0.13.63",
+        "targetId": "maker"
+    },
     "supportedTargets": [
         "maker"
     ],
