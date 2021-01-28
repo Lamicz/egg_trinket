@@ -1,17 +1,12 @@
-let pixelCurrentMode: uint8 = 1 // [0 - no flash, 1 - flash, 2 - RGB, 3 - RGB one color]
+let pixelCurrentMode: uint8 = 0 // [0 - no flash, 1 - flash, 2 - RGB, 3 - RGB one color]
 let stripCurrentModeTimerSet: uint8 = 30
 let pixelSpeedTrigger: boolean = false
 let pixelRGBColorChange: boolean = false
-let pixelStartLightup: boolean = false
-let pixelLightupCondition: boolean = true
-let pixelLightupConditionTimer: boolean = true
-let pixelRGBColorChangeAll: Buffer = Buffer.create(3);
 let pixelsCntActive: uint8 = 0
 let stripFlash: uint8 = 0
 let stripFlashTotal: uint8 = 0
 let stripFlashTimerSet: uint8 = 15
-let stripFreePositions: number[] = [];
-let eggPixelsToLightup: EggPixel[] = []
+let stripFreePositions: number[] = []
 let pixelSpeedIndex: uint8 = 0
 let pixelSpeedTimer: uint32 = 0
 let pixelSpeedDelay: uint16 = 0
@@ -33,15 +28,13 @@ const flashTimesMinMax: Buffer = Buffer.fromArray([1, 5]) // kolikrat se ma blik
 const stripPixelsFlashStartIndex: uint8 = 10 // index alespon 1x zablesk
 const stripPixelsFlashLength = stripPixelsFlash.length - 1
 const stripFlashTimer: Buffer = Buffer.fromArray([15, 60]) // [s] interval pro random flash timer
-const pixelWaitCyclesNormal: uint8 = 5 // prodleva pixelu na mbr pro mode 1 a 2 [pocet cyklu]
-const pixelWaitCyclesHigh: uint8 = 20 // prodleva pixelu na mbr pro mode 3 [pocet cyklu]
+const pixelWaitCycles: uint8 = 5 // prodleva pixelu na mbr pro mode 1 a 2 [pocet cyklu]
 const strip = light.createNeoPixelStrip(pins.D1, stripLength)
 
 let pixelsCntCurrent: uint8 = Math.randomRange(pixelsMinMax.getUint8(0), pixelsMinMax.getUint8(1));
 let pixelDifferentBrightnesses: uint8 = Math.round(pixelsCntCurrent / 5)
 let pixelCurrentSpeed: Buffer = Buffer.fromArray(pixelSpeeds[pixelSpeedIndex])
 let stripLengthCurrent: uint16 = stripTopStart
-let pixelWaitCycles: uint8 = pixelWaitCyclesNormal
 
 class EggPixel {
 
@@ -57,18 +50,12 @@ class EggPixel {
 
     constructor(mode: number){
 
-        if(mode == 2){
+        if(mode == 3){
             
             this.rgb.setUint8(0, Math.randomRange(0, 255));
             this.rgb.setUint8(1, Math.randomRange(0, 255));
             this.rgb.setUint8(2, Math.randomRange(0, 255));
 
-        }else if(mode == 3){
-
-            this.rgb.setUint8(0, pixelRGBColorChangeAll.getUint8(0));
-            this.rgb.setUint8(1, pixelRGBColorChangeAll.getUint8(1));
-            this.rgb.setUint8(2, pixelRGBColorChangeAll.getUint8(2));
-            
         } else {
 
             this.rgb.setUint8(0, pixelRGBColor.getUint8(0));
@@ -96,10 +83,10 @@ input.buttonD0.onEvent(ButtonEvent.LongClick, function () {
             pixel.setColor(PixelColors.Green)
             break
         case 2:
-            pixel.setColor(PixelColors.Blue)
+            pixel.setColor(PixelColors.Black)
             break
         case 3:
-            pixel.setColor(PixelColors.White)
+            pixel.setColor(PixelColors.Blue)
             break
     }
     
@@ -108,11 +95,8 @@ input.buttonD0.onEvent(ButtonEvent.LongClick, function () {
 
 input.buttonD0.onEvent(ButtonEvent.Click, function () {
 
-    if (stripLengthCurrent == stripLength) {
-        stripLengthCurrent = stripTopStart        
-    } else {
-        stripLengthCurrent = stripLength
-    }
+    stripLengthCurrent = (stripLengthCurrent == stripLength) ? stripTopStart : stripLength
+
     stripReset()
 })
 
@@ -133,7 +117,7 @@ input.touchD3.onEvent(ButtonEvent.Click, function () {
 pins.LED.digitalWrite(false)
 
 pixel.setBrightness(85)
-pixel.setColor(PixelColors.Green)
+pixel.setColor(PixelColors.Red)
 
 strip.setBuffered(true)
 strip.setBrightness(255)
@@ -146,10 +130,8 @@ forever(function () {
 
         control.timer2.reset()
 
-        if(pixelCurrentMode < 3){
-            pixelsCntCurrent = Math.randomRange(pixelsMinMax.getUint8(0), pixelsMinMax.getUint8(1));
-            pixelDifferentBrightnesses = Math.round(pixelsCntCurrent / 5)
-        }
+        pixelsCntCurrent = Math.randomRange(pixelsMinMax.getUint8(0), pixelsMinMax.getUint8(1));
+        pixelDifferentBrightnesses = Math.round(pixelsCntCurrent / 5)
 
         stripCurrentModeTimerSet = Math.randomRange(stripCurrentModeTimer.getUint8(0), stripCurrentModeTimer.getUint8(1));
     }
@@ -169,22 +151,9 @@ forever(function () {
 
         control.timer3.reset()
 
-        if(pixelCurrentMode == 2 && !pixelRGBColorChange){
+        if(pixelCurrentMode == 3 && !pixelRGBColorChange){
             pixelRGBColorChange = true
         }
-
-        if(pixelCurrentMode == 3){
-            pixelRGBColorChangeAll.setUint8(0, Math.randomRange(0, 255));
-            pixelRGBColorChangeAll.setUint8(1, Math.randomRange(0, 255));
-            pixelRGBColorChangeAll.setUint8(2, Math.randomRange(0, 255));
-        }
-    }
-
-    if(control.timer4.seconds() > 20){
-
-        pixelLightupConditionTimer = true
-
-        control.timer4.reset()
     }
 
     if ((pixelSpeedTrigger || (pixelSpeedIndex > 0)) && ((control.millis() - pixelSpeedTimer) > pixelSpeedDelay)) {
@@ -231,7 +200,6 @@ forever(function () {
             pixelCreate(eggPixel, pos)            
         }
     })
-
     strip.show()
 })
 
@@ -267,10 +235,13 @@ function pixelProcess(eggPixel: EggPixel, pos: number) {
 
         if((eggPixel.currentBrightness == eggPixel.maxBrightness) || (eggPixel.status == 2)){
 
-            if(pixelCurrentMode == 2){
+            if(pixelCurrentMode == 3){
                 strip.setPixelColor(eggPixel.position, pixel.rgb(eggPixel.rgb.getUint8(0), eggPixel.rgb.getUint8(1), eggPixel.rgb.getUint8(2)));
             }else{
                 strip.setPixelColor(eggPixel.position, pixel.rgb(255, 162, 46))
+
+                console.log('flashed')
+
             }
             strip.show()
 
@@ -286,14 +257,6 @@ function pixelProcess(eggPixel: EggPixel, pos: number) {
     if ((eggPixel.currentBrightness == 0) && (eggPixel.status == 2)) {
 
         pixelsCntActive--
-
-        if(pixelsCntActive == 0){
-            pixelStartLightup = true
-            pixelLightupConditionTimer = false
-            control.timer4.reset()
-        }else{
-            pixelStartLightup = false
-        }
         
         if(eggPixel.maxBrightnessHigh){
             pixelDifferentBrightness--
@@ -308,23 +271,11 @@ function pixelProcess(eggPixel: EggPixel, pos: number) {
 
 function pixelCreate(eggPixel: EggPixel, pos: number) {
 
-    if(pixelCurrentMode == 3){
-        pixelLightupCondition = pixelStartLightup && pixelLightupConditionTimer
-    }else{
-        pixelLightupCondition = pixelsCntActive < pixelsCntCurrent
-    }
-
-    if(pixelLightupCondition){
+    if(pixelsCntActive < pixelsCntCurrent){
 
         pixelsCntActive++
 
-        control.timer4.reset()
-
-        if(pixelCurrentMode < 3){
-            eggPixel.position = stripFreePositions[Math.randomRange(0, stripFreePositions.length - 1)];            
-        }else{
-            eggPixel.position = pos                     
-        }
+        eggPixel.position = stripFreePositions[Math.randomRange(0, stripFreePositions.length - 1)];            
         stripFreePositions.removeElement(eggPixel.position);
 
         eggPixel.maxBrightness = Math.randomRange(51, 86);
@@ -356,16 +307,23 @@ function pixelCreate(eggPixel: EggPixel, pos: number) {
         if ((eggPixel.position >= stripTopStart) && (eggPixel.maxBrightness > 40)) {
             eggPixel.maxBrightness = 40
         }
-
         if (pixelSpeedIndex > 0) {
             eggPixel.maxBrightness += 40
         }
 
-        z = Math.randomRange(Math.round(eggPixel.maxBrightness / pixelCurrentSpeed.getUint8(0)), Math.round(eggPixel.maxBrightness / pixelCurrentSpeed.getUint8(1)));
-        if (z < 1) {
-            z = 1
+        if((pixelCurrentMode == 2) && (pixelSpeedIndex == 0)){
+
+            eggPixel.stepChangeBrightness = 0
+            eggPixel.maxBrightness = 0
+
+        }else{
+            
+            z = Math.randomRange(Math.round(eggPixel.maxBrightness / pixelCurrentSpeed.getUint8(0)), Math.round(eggPixel.maxBrightness / pixelCurrentSpeed.getUint8(1)));
+            if (z < 1) {
+                z = 1
+            }
+            eggPixel.stepChangeBrightness = z
         }
-        eggPixel.stepChangeBrightness = z
 
         if (pixelRGBColorChange) {
 
@@ -374,13 +332,6 @@ function pixelCreate(eggPixel: EggPixel, pos: number) {
             eggPixel.rgb.setUint8(2, Math.randomRange(0, 255));
 
             pixelRGBColorChange = false
-        }
-
-        if(pixelCurrentMode == 3){
-
-            eggPixel.rgb.setUint8(0, pixelRGBColorChangeAll.getUint8(0));
-            eggPixel.rgb.setUint8(1, pixelRGBColorChangeAll.getUint8(1));
-            eggPixel.rgb.setUint8(2, pixelRGBColorChangeAll.getUint8(2));
         }
 
         if(eggPixel.maxBrightness > 255){
@@ -398,12 +349,10 @@ function stripReset() {
     control.timer1.reset()
     control.timer2.reset()
     control.timer3.reset()
-    control.timer4.reset()
 
     strip.clear()
 
-    stripFreePositions = [];
-    eggPixelsToLightup = []
+    stripFreePositions = []
     pixels = []
 
     pixelDifferentBrightness = 0
@@ -411,33 +360,10 @@ function stripReset() {
     stripFlash = 0
     pixelsCntActive = 0
 
-    pixelStartLightup = true
-    pixelLightupCondition = true
-
     b = 0
-
-    if(pixelCurrentMode < 3){
-
-        while (b < pixelsMinMax.getUint8(1)) {
-            pixels[b] = new EggPixel(pixelCurrentMode);
-            b++
-        }
-
-        pixelWaitCycles = pixelWaitCyclesNormal
-
-    } else {
-
-        pixelsCntCurrent = stripLengthCurrent
-        pixelWaitCycles = pixelWaitCyclesHigh
-
-        pixelRGBColorChangeAll.setUint8(0, Math.randomRange(0, 255))
-        pixelRGBColorChangeAll.setUint8(1, Math.randomRange(0, 255))
-        pixelRGBColorChangeAll.setUint8(2, Math.randomRange(0, 255))
-
-        while (b < stripLengthCurrent) {
-            pixels[b] = new EggPixel(pixelCurrentMode);
-            b++
-        }
+    while (b < pixelsMinMax.getUint8(1)) {
+        pixels[b] = new EggPixel(pixelCurrentMode);
+        b++
     }
 
     b = 0
