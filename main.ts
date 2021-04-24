@@ -239,9 +239,6 @@ function pixelProcess(eggPixel: EggPixel, pos: number) {
                 strip.setPixelColor(eggPixel.position, pixel.rgb(eggPixel.rgb.getUint8(0), eggPixel.rgb.getUint8(1), eggPixel.rgb.getUint8(2)));
             }else{
                 strip.setPixelColor(eggPixel.position, pixel.rgb(255, 162, 46))
-
-                console.log('flashed')
-
             }
             strip.show()
 
